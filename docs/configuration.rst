@@ -358,12 +358,39 @@ Description
     i.e. before starting a new extractor.
 
 
+extractor.*.sleep-429
+---------------------
+Type
+    |Duration|_
+Default
+    ``60``
+Description
+    Number of seconds to sleep when receiving a `429 Too Many Requests`
+    response before `retrying <extractor.*.retries_>`__ the request.
+
+
 extractor.*.sleep-request
 -------------------------
 Type
     |Duration|_
 Default
-    ``0``
+    * ``"0.5-1.5"``
+        ``[Danbooru]``, ``[E621]``, ``[foolfuuka]:search``, ``itaku``,
+        ``newgrounds``, ``[philomena]``, ``pixiv:novel``, ``plurk``,
+        ``poipiku`` , ``pornpics``, ``soundgasm``, ``urlgalleries``,
+        ``vk``, ``zerochan``
+    * ``"1.0-2.0"``
+        ``flickr``, ``weibo``, ``[wikimedia]``
+    * ``"2.0-4.0"``
+        ``behance``, ``imagefap``, ``[Nijie]``
+    * ``"3.0-6.0"``
+        ``exhentai``, ``idolcomplex``, ``[reactor]``, ``readcomiconline``
+    * ``"6.0-6.1"``
+        ``twibooru``
+    * ``"6.0-12.0"``
+        ``instagram``
+    * ``0``
+        otherwise
 Description
     Minimal time interval in seconds between each HTTP request
     during data extraction.
@@ -382,6 +409,7 @@ Description
     Specifying username and password is required for
 
     * ``nijie``
+    * ``horne``
 
     and optional for
 
@@ -389,8 +417,12 @@ Description
     * ``aryion``
     * ``atfbooru`` (*)
     * ``bluesky``
+    * ``booruvar`` (*)
+    * ``coomerparty``
     * ``danbooru`` (*)
+    * ``deviantart``
     * ``e621`` (*)
+    * ``e6ai`` (*)
     * ``e926`` (*)
     * ``exhentai``
     * ``idolcomplex``
@@ -401,7 +433,6 @@ Description
     * ``mangoxo``
     * ``pillowfort``
     * ``sankaku``
-    * ``seisoparty``
     * ``subscribestar``
     * ``tapas``
     * ``tsumino``
@@ -417,7 +448,7 @@ Description
     the API key found in your user profile, not the actual account password.
 
     Note: Leave the ``password`` value empty or undefined
-    to get prompted for a passeword when performing a login
+    to be prompted for a passeword when performing a login
     (see `getpass() <https://docs.python.org/3/library/getpass.html#getpass.getpass>`__).
 
 
@@ -557,8 +588,8 @@ extractor.*.browser
 Type
     ``string``
 Default
-    * ``"firefox"`` for ``patreon``, ``mangapark``, and ``mangasee``
-    * ``null`` everywhere else
+    * ``"firefox"``: ``artstation``, ``mangasee``, ``patreon``, ``pixiv:series``, ``twitter``
+    * ``null``: otherwise
 Example
     * ``"chrome:macos"``
 Description
@@ -633,8 +664,8 @@ extractor.*.tls12
 Type
     ``bool``
 Default
-    * ``true``
-    * ``false`` for ``patreon``, ``pixiv:series``
+    * ``false``: ``patreon``, ``pixiv:series``
+    * ``true``: otherwise
 Description
     Allow selecting TLS 1.2 cipher suites.
 
@@ -834,6 +865,65 @@ Description
 
     See `<https://www.sqlite.org/pragma.html>`__
     for available ``PRAGMA`` statements and further details.
+
+
+extractor.*.actions
+-------------------
+Type
+    * ``object`` (`pattern` -> `action`)
+    * ``list`` of ``lists`` with 2 ``strings`` as elements
+Example
+    .. code:: json
+
+        {
+            "error"                   : "status |= 1",
+            "warning:(?i)unable to .+": "exit 127",
+            "info:Logging in as .+"   : "level = debug"
+        }
+
+    .. code:: json
+
+        [
+            ["error"                   , "status |= 1"  ],
+            ["warning:(?i)unable to .+", "exit 127"     ],
+            ["info:Logging in as .+"   , "level = debug"]
+        ]
+
+Description
+    Perform an ``action`` when logging a message matched by ``pattern``.
+
+    ``pattern`` is parsed as severity level (``debug``, ``info``, ``warning``, ``error``, or integer value)
+    followed by an optional `Python Regular Expression <https://docs.python.org/3/library/re.html#regular-expression-syntax>`__
+    separated by a colon ``:``.
+    Using ``*`` as `level` or leaving it empty
+    matches logging messages of all levels
+    (e.g. ``*:<re>`` or ``:<re>``).
+
+    ``action`` is parsed as action type
+    followed by (optional) arguments.
+
+    Supported Action Types:
+
+    ``status``:
+        | Modify job exit status.
+        | Expected syntax is ``<operator> <value>`` (e.g. ``= 100``).
+
+        Supported operators are
+        ``=`` (assignment),
+        ``&`` (bitwise AND),
+        ``|`` (bitwise OR),
+        ``^`` (bitwise XOR).
+    ``level``:
+        | Modify severity level of the current logging message.
+        | Can be one of ``debug``, ``info``, ``warning``, ``error`` or an integer value.
+    ``print``
+        Write argument to stdout.
+    ``restart``:
+        Restart the current extractor run.
+    ``wait``:
+        Stop execution until Enter is pressed.
+    ``exit``:
+        Exit the program with the given argument as exit status.
 
 
 extractor.*.postprocessors
@@ -1872,6 +1962,20 @@ Description
     from `linking your Flickr account to gallery-dl <OAuth_>`__.
 
 
+extractor.flickr.contexts
+-------------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    For each photo, return the albums and pools it belongs to
+    as ``set`` and ``pool`` metadata.
+
+    Note: This requires 1 additional API call per photo.
+    See `flickr.photos.getAllContexts <https://www.flickr.com/services/api/flickr.photos.getAllContexts.html>`__ for details.
+
+
 extractor.flickr.exif
 ---------------------
 Type
@@ -1879,9 +1983,11 @@ Type
 Default
     ``false``
 Description
-    Fetch `exif` and `camera` metadata for each photo.
+    For each photo, return its EXIF/TIFF/GPS tags
+    as ``exif`` and ``camera`` metadata.
 
     Note: This requires 1 additional API call per photo.
+    See `flickr.photos.getExif <https://www.flickr.com/services/api/flickr.photos.getExif.html>`__ for details.
 
 
 extractor.flickr.metadata
@@ -1901,7 +2007,7 @@ Description
 
     It is possible to specify a custom list of metadata includes.
     See `the extras parameter <https://www.flickr.com/services/api/flickr.people.getPhotos.html>`__
-    in `Flickr API docs <https://www.flickr.com/services/api/>`__
+    in `Flickr's API docs <https://www.flickr.com/services/api/>`__
     for possible field names.
 
 
@@ -1999,6 +2105,20 @@ Description
     Values from the API Access Credentials section found at the bottom of your
     `Account Options <https://gelbooru.com/index.php?page=account&s=options>`__
     page.
+
+
+extractor.gelbooru.favorite.order-posts
+---------------------------------------
+Type
+    ``string``
+Default
+    ``"desc"``
+Description
+    Controls the order in which favorited posts are returned.
+
+    * ``"asc"``: Ascending favorite date order (oldest first)
+    * ``"desc"``: Descending favorite date order (newest first)
+    * ``"reverse"``: Same as ``"asc"``
 
 
 extractor.generic.enabled
@@ -2287,6 +2407,16 @@ Description
     Extract a user's direct messages as ``dms`` metadata.
 
 
+extractor.kemonoparty.announcements
+-----------------------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Extract a user's announcements as ``announcements`` metadata.
+
+
 extractor.kemonoparty.favorites
 -------------------------------
 Type
@@ -2344,6 +2474,22 @@ Description
     Set this to ``"unique"`` to filter out duplicate revisions.
 
     Note: This requires 1 additional HTTP request per post.
+
+
+extractor.kemonoparty.order-revisions
+-------------------------------------
+Type
+    ``string``
+Default
+    ``"desc"``
+Description
+    Controls the order in which
+    `revisions <extractor.kemonoparty.revisions_>`__
+    are returned.
+
+    * ``"asc"``: Ascending order (oldest first)
+    * ``"desc"``: Descending order (newest first)
+    * ``"reverse"``: Same as ``"asc"``
 
 
 extractor.khinsider.format
@@ -2829,14 +2975,24 @@ Description
     `gppt <https://github.com/eggplants/get-pixivpy-token>`__.
 
 
-extractor.pixiv.embeds
-----------------------
+extractor.pixiv.novel.covers
+----------------------------
 Type
     ``bool``
 Default
     ``false``
 Description
-    Download images embedded in novels.
+    Download cover images.
+
+
+extractor.pixiv.novel.embeds
+----------------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Download embedded images.
 
 
 extractor.pixiv.novel.full-series
@@ -3771,6 +3927,19 @@ Description
     * ``"wait"``: Wait until rate limit reset
 
 
+extractor.twitter.relogin
+-------------------------
+Type
+    ``bool``
+Default
+    ``true``
+Description
+    | When receiving a "Could not authenticate you" error while logged in with
+      `username & passeword <extractor.*.username & .password_>`__,
+    | refresh the current login session and
+      try to continue from where it left off.
+
+
 extractor.twitter.locked
 ------------------------
 Type
@@ -3920,6 +4089,31 @@ Description
 
     Available formats are
     ``"raw"``, ``"full"``, ``"regular"``, ``"small"``, and ``"thumb"``.
+
+
+extractor.vipergirls.domain
+---------------------------
+Type
+    ``string``
+Default
+    ``"vipergirls.to"``
+Description
+    Specifies the domain used by ``vipergirls`` extractors.
+
+    For example ``"viper.click"`` if the main domain is blocked or to bypass Cloudflare,
+
+
+extractor.vipergirls.like
+-------------------------
+Type
+    ``bool``
+Default
+    ``false``
+Description
+    Automatically `like` posts after downloading their images.
+
+    Note: Requires `login <extractor.*.username & .password_>`__
+    or `cookies <extractor.*.cookies_>`__
 
 
 extractor.vsco.videos
@@ -4727,10 +4921,33 @@ output.colors
 Type
     ``object`` (`key` -> `ANSI color`)
 Default
-    ``{"success": "1;32", "skip": "2"}``
+    .. code:: json
+
+        {
+            "success": "1;32",
+            "skip"   : "2",
+            "debug"  : "0;37",
+            "info"   : "1;37",
+            "warning": "1;33",
+            "error"  : "1;31"
+        }
+
 Description
-    Controls the `ANSI colors <https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797#colors--graphics-mode>`__
-    used with |mode: color|__ for successfully downloaded or skipped files.
+    Controls the
+    `ANSI colors <https://gist.github.com/fnky/458719343aabd01cfb17a3a4f7296797#colors--graphics-mode>`__
+    used for various outputs.
+
+    Output for |mode: color|__
+
+    * ``success``: successfully downloaded files
+    * ``skip``: skipped files
+
+    Logging Messages:
+
+    * ``debug``: debug logging messages
+    * ``info``: info logging messages
+    * ``warning``: warning logging messages
+    * ``error``: error logging messages
 
 .. __: `output.mode`_
 
@@ -4740,7 +4957,7 @@ output.ansi
 Type
     ``bool``
 Default
-    ``false``
+    ``true``
 Description
     | On Windows, enable ANSI escape sequences and colored output
     | by setting the ``ENABLE_VIRTUAL_TERMINAL_PROCESSING`` flag for stdout and stderr.
